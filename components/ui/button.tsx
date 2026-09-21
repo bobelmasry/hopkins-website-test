@@ -1,4 +1,4 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
+import type { ComponentProps } from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
@@ -43,10 +43,14 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  type = "button",
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
   return (
-    <ButtonPrimitive
+    <button
+      type={type}
+      // Prevent Firefox from restoring a stale disabled state before hydration.
+      {...{ autoComplete: "off" }}
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}

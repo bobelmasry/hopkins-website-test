@@ -1,310 +1,77 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { Check, Plus, X } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
-import { loadConfiguration, saveConfiguration } from "@/lib/configuration";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
+import { Navigation } from "@/components/navigation";
+import { Brand, configuredBrands, loadConfiguration, saveConfiguration } from "@/lib/configuration";
 
-const inputClassName =
-  "h-11 w-full rounded-md border border-black/25 bg-white px-3 text-sm text-black outline-none transition-colors placeholder:text-black/35 focus:border-black focus:ring-2 focus:ring-black/10";
-
-function SidebarNavigation() {
-  return (
-    <Sidebar
-      aria-label="Main navigation"
-      className="w-64 shrink-0 border-r-2 border-black/20 bg-[#f0efec] p-4 pb-6 text-black"
-    >
-      <div className="flex items-center gap-2.5 px-3 pb-8 text-[21px] font-bold tracking-[-0.03em]">
-        <Image
-          src="/askhopkins.png"
-          alt=""
-          width={34}
-          height={34}
-          className="h-[34px] w-[34px] rounded-lg object-contain"
-          priority
-        />
-        <span>Hopkins</span>
-      </div>
-
-      <SidebarContent className="flex flex-col gap-7">
-        <SidebarGroup>
-          <SidebarGroupLabel>Your brand</SidebarGroupLabel>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="/">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                  Home
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Analytics</SidebarGroupLabel>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="#">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                  Visibility
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="#">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                  Brand AI Analytics
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Optimisations</SidebarGroupLabel>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="#">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                  AEO/SEO Agents
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="#">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                  Documents
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Context</SidebarGroupLabel>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive>
-                <Link href="/configuration" aria-current="page">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black bg-black" aria-hidden="true" />
-                  Configuration
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="#">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                  Knowledge Bases
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
-  );
-}
+const inputClassName = "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-slate-500";
+const emptyBrand = (): Brand => ({ domain: "", name: "", aliases: [] });
 
 export default function ConfigurationPage() {
-  const [businessDomain, setBusinessDomain] = useState("");
-  const [competitors, setCompetitors] = useState([""]);
+  const [brands, setBrands] = useState<Brand[]>([emptyBrand()]);
   const [questions, setQuestions] = useState([""]);
-  const [saved, setSaved] = useState(false);
-
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      const configuration = loadConfiguration();
-
-      if (!configuration) {
-        return;
-      }
-
-      setBusinessDomain(configuration.businessDomain);
-      setCompetitors(configuration.competitorDomains.length ? configuration.competitorDomains : [""]);
-      setQuestions(configuration.questions.length ? configuration.questions : [""]);
+    const timer = window.setTimeout(() => {
+      try {
+        const configuration = loadConfiguration();
+        if (configuration) {
+          setBrands(configuredBrands(configuration));
+          setQuestions(configuration.questions.length ? configuration.questions : [""]);
+        }
+      } catch { setError("Could not load configuration from this browser."); }
     }, 0);
-
-    return () => window.clearTimeout(timeoutId);
+    return () => window.clearTimeout(timer);
   }, []);
 
-  function updateItem(
-    setter: React.Dispatch<React.SetStateAction<string[]>>,
-    index: number,
-    value: string,
-  ) {
-    setter((items) => items.map((item, itemIndex) => (itemIndex === index ? value : item)));
-    setSaved(false);
-  }
-
-  function removeItem(
-    setter: React.Dispatch<React.SetStateAction<string[]>>,
-    index: number,
-  ) {
-    setter((items) => items.filter((_, itemIndex) => itemIndex !== index));
-    setSaved(false);
+  function updateBrand(index: number, changes: Partial<Brand>) {
+    setMessage("");
+    setBrands((items) => items.map((brand, i) => i === index ? { ...brand, ...changes } : brand));
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    saveConfiguration({
-      businessDomain,
-      competitorDomains: competitors.filter(Boolean),
-      questions: questions.filter(Boolean),
-    });
-    setSaved(true);
+    setError("");
+    setMessage("");
+    try {
+      const cleanBrands = brands.map((brand) => {
+        const domain = new URL(brand.domain.includes("://") ? brand.domain.trim() : `https://${brand.domain.trim()}`).hostname.toLowerCase().replace(/^www\./, "");
+        if (!domain.includes(".")) throw new Error("Enter a valid domain for each company.");
+        return { domain, name: brand.name.trim(), aliases: [...new Set(brand.aliases.map((a) => a.trim()).filter(Boolean))] };
+      });
+      if (new Set(cleanBrands.map((b) => b.domain)).size !== cleanBrands.length) throw new Error("Each company must have a different domain.");
+      const cleanQuestions = [...new Set(questions.map((q) => q.trim()).filter(Boolean))];
+      if (!cleanQuestions.length) throw new Error("Add at least one question.");
+      saveConfiguration({ businessDomain: cleanBrands[0].domain, competitorDomains: cleanBrands.slice(1).map((b) => b.domain), brands: cleanBrands, questions: cleanQuestions });
+      setBrands(cleanBrands);
+      setQuestions(cleanQuestions);
+      setMessage("Configuration saved. Return to Visibility to run a check.");
+    } catch (error) { setError(error instanceof Error ? error.message : "Could not save configuration in this browser."); }
   }
 
-  return (
-    <div className="flex min-h-screen text-black">
-      <SidebarNavigation />
-
-      <main className="min-w-0 flex-1 bg-[#f7f7f5]">
-        <div className="mx-auto max-w-5xl px-6 py-8 md:px-10 md:py-12">
-          <div className="mb-8 max-w-2xl">
-            <h2 className="mb-2 text-xl font-semibold">Teach Hopkins about your market</h2>
-            <p className="m-0 text-sm leading-6 text-black/55">
-              Add the domains and questions you want to use when measuring your brand&apos;s visibility.
-            </p>
+  return <div className="flex min-h-screen text-black"><Navigation /><main className="min-w-0 flex-1 bg-gray-50 p-6 md:p-10">
+    <div className="mx-auto max-w-4xl"><h1 className="text-3xl font-semibold">Configuration</h1><p className="mt-2 text-sm text-gray-600">Choose who to track and what customers might ask.</p>
+      <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+        {brands.map((brand, index) => <fieldset key={index} className="rounded-xl border border-gray-200 bg-white p-5">
+          <legend className="px-2 font-semibold">{index === 0 ? "Your business" : `Competitor ${index}`}</legend>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm">Domain<input required value={brand.domain} placeholder="thenorthface.com" className={inputClassName} onChange={(e) => updateBrand(index, { domain: e.target.value })} /></label>
+            <label className="text-sm">Brand name<input value={brand.name} placeholder="The North Face" className={inputClassName} onChange={(e) => updateBrand(index, { name: e.target.value })} /></label>
+            <label className="text-sm md:col-span-2">Alternative spellings (comma separated)<input value={brand.aliases.join(",")} placeholder="North Face, TNF" className={inputClassName} onChange={(e) => updateBrand(index, { aliases: e.target.value.split(",") })} /></label>
           </div>
-
-          <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-            <section className="rounded-lg border border-black/15 bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/4%)]">
-              <div className="mb-6 border-b border-black/10 pb-5">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-black/45">01</p>
-                <h3 className="text-base font-semibold">Your business</h3>
-                <p className="mt-1 text-sm leading-5 text-black/50">The primary domain Hopkins should track.</p>
-              </div>
-
-              <label htmlFor="business-domain" className="mb-2 block text-sm font-medium">Business domain</label>
-              <input
-                id="business-domain"
-                name="business-domain"
-                type="text"
-                required
-                placeholder="yourcompany.com"
-                value={businessDomain}
-                className={inputClassName}
-                onChange={(event) => {
-                  setBusinessDomain(event.target.value);
-                  setSaved(false);
-                }}
-              />
-              <p className="mt-2 text-xs text-black/45">Enter the domain without https:// or a trailing path.</p>
-            </section>
-
-            <section className="rounded-lg border border-black/15 bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/4%)]">
-              <div className="mb-6 border-b border-black/10 pb-5">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-black/45">02</p>
-                <h3 className="text-base font-semibold">Similar companies</h3>
-                <p className="mt-1 text-sm leading-5 text-black/50">Compare your visibility against these domains.</p>
-              </div>
-
-              <div className="space-y-3">
-                {competitors.map((competitor, index) => (
-                  <div key={`competitor-${index}`} className="flex items-center gap-2">
-                    <label htmlFor={`competitor-${index}`} className="sr-only">Similar company domain {index + 1}</label>
-                    <input
-                      id={`competitor-${index}`}
-                      type="text"
-                      value={competitor}
-                      placeholder="competitor.com"
-                      className={inputClassName}
-                      onChange={(event) => updateItem(setCompetitors, index, event.target.value)}
-                    />
-                    {competitors.length > 1 && (
-                      <Button type="button" variant="ghost" size="icon" aria-label={`Remove competitor ${index + 1}`} onClick={() => removeItem(setCompetitors, index)}>
-                        <X />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-4 border-black/20 bg-white text-black hover:bg-black/5"
-                onClick={() => {
-                  setCompetitors((items) => [...items, ""]);
-                  setSaved(false);
-                }}
-              >
-                <Plus />
-                Add domain
-              </Button>
-            </section>
-
-            <section className="rounded-lg border border-black/15 bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/4%)] lg:col-span-2">
-              <div className="mb-6 border-b border-black/10 pb-5">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-black/45">03</p>
-                <h3 className="text-base font-semibold">Questions to monitor</h3>
-                <p className="mt-1 text-sm leading-5 text-black/50">The questions you want to ask AI models about your category.</p>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                {questions.map((question, index) => (
-                  <div key={`question-${index}`} className="flex items-start gap-2">
-                    <label htmlFor={`question-${index}`} className="sr-only">Question {index + 1}</label>
-                    <textarea
-                      id={`question-${index}`}
-                      rows={2}
-                      value={question}
-                      placeholder="What is the best option for..."
-                      className={`${inputClassName} h-auto resize-y py-3 leading-5`}
-                      onChange={(event) => updateItem(setQuestions, index, event.target.value)}
-                    />
-                    {questions.length > 1 && (
-                      <Button type="button" variant="ghost" size="icon" aria-label={`Remove question ${index + 1}`} onClick={() => removeItem(setQuestions, index)}>
-                        <X />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-4 border-black/20 bg-white text-black hover:bg-black/5"
-                onClick={() => {
-                  setQuestions((items) => [...items, ""]);
-                  setSaved(false);
-                }}
-              >
-                <Plus />
-                Add question
-              </Button>
-            </section>
-
-            <div className="flex flex-wrap items-center justify-end gap-4 lg:col-span-2">
-              {saved && (
-                <p className="mr-auto flex items-center gap-2 text-sm text-green-700" role="status">
-                  <Check className="size-4" /> Configuration saved
-                </p>
-              )}
-              <Button type="submit" size="lg" className="bg-black px-5 text-white hover:bg-black/80">Save configuration</Button>
-            </div>
-          </form>
-        </div>
-      </main>
+          <p className="mt-3 text-xs text-gray-500">We match the domain, brand name and alternative spellings. If the name is blank, we infer it from the domain.</p>
+          {index > 0 && <Button type="button" variant="ghost" className="mt-3" onClick={() => { setBrands((items) => items.filter((_, i) => i !== index)); setMessage(""); }}>Remove competitor</Button>}
+        </fieldset>)}
+        <Button type="button" variant="outline" disabled={brands.length >= 20} onClick={() => { setBrands((items) => [...items, emptyBrand()]); setMessage(""); }}>Add competitor</Button>
+        <fieldset className="rounded-xl border border-gray-200 bg-white p-5"><legend className="px-2 font-semibold">Questions to monitor</legend><p className="mb-4 text-sm text-gray-600">Use category questions, such as “Which brands make waterproof hiking jackets?”</p>
+          <div className="space-y-3">{questions.map((question, index) => <div key={index} className="flex items-end gap-2"><label className="flex-1 text-sm">Question {index + 1}<textarea rows={2} value={question} className={inputClassName} onChange={(e) => { setQuestions((items) => items.map((q, i) => i === index ? e.target.value : q)); setMessage(""); }} /></label>{questions.length > 1 && <Button type="button" variant="ghost" aria-label={`Remove question ${index + 1}`} onClick={() => { setQuestions((items) => items.filter((_, i) => i !== index)); setMessage(""); }}>Remove</Button>}</div>)}</div>
+          <Button type="button" variant="outline" className="mt-4" disabled={questions.length >= 20} onClick={() => { setQuestions((items) => [...items, ""]); setMessage(""); }}>Add question</Button>
+        </fieldset>
+        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}{message && <p role="status" className="text-sm text-green-700">{message}</p>}
+        <Button type="submit">Save configuration</Button>
+      </form>
     </div>
-  );
+  </main></div>;
 }

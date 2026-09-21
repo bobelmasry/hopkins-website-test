@@ -1,461 +1,137 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { useEffect } from "react";
-
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
-
-import {
-  ButtonGroup,
-} from "@/components/ui/button-group";
-
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-
-import { Badge } from "@/components/ui/badge"
-import { loadConfiguration } from "@/lib/configuration";
-import { CompanyResult, runResearch } from "@/lib/research";
+import { VisibilityChart } from "@/components/visibility-chart";
+import { Navigation } from "@/components/navigation";
+import { comparisonKey, loadHistory, saveHistory } from "@/lib/history";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { configuredBrands, loadConfiguration } from "@/lib/configuration";
+import { ResearchResponse, runResearch, summarizeResearch } from "@/lib/research";
 
 export default function Home() {
-  const [timeRange, setTimeRange] = useState("7d");
-  const [configuredDomains, setConfiguredDomains] = useState<string[]>([]);
-  const [researchResults, setResearchResults] = useState<CompanyResult[]>([]);
+  const [result, setResult] = useState<ResearchResponse | null>(null);
   const [isResearching, setIsResearching] = useState(false);
-  const [researchError, setResearchError] = useState("");
+  const [error, setError] = useState("");
+
+  const [history, setHistory] = useState<ResearchResponse[]>([]);
+  const [ready, setReady] = useState(false);
+  const [progress, setProgress] = useState({ completed: 0, total: 0 });
+  const [partial, setPartial] = useState(false);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      const configuration = loadConfiguration();
-      const domains = configuration
-        ? [configuration.businessDomain, ...configuration.competitorDomains].filter(Boolean).slice(0, 3)
-        : [];
-
-      setConfiguredDomains(domains);
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = loadHistory();
+        setHistory(saved);
+        setResult(saved[0] ?? null);
+      } catch (error) { setError(error instanceof Error ? error.message : "Could not load history."); }
+      setReady(true);
     }, 0);
-
-    return () => window.clearTimeout(timeoutId);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function handleRunCheck() {
-    const configuration = loadConfiguration();
-
-    if (!configuration?.businessDomain || !configuration.questions.length) {
-      setResearchError("Add a business domain and at least one question in Configuration first.");
-      return;
-    }
-
-    const domains = [configuration.businessDomain, ...configuration.competitorDomains].filter(Boolean);
-
+    setError("");
     setIsResearching(true);
-    setResearchError("");
-
     try {
-      const response = await runResearch(
-        domains.map((domain) => ({
-          name: domain,
-          domain,
-          use_web_search: true,
-          questions: configuration.questions,
-        })),
-      );
-
-      setResearchResults(response.companies);
+      const configuration = loadConfiguration();
+      const questions = [...new Set(configuration?.questions.map((q) => q.trim()).filter(Boolean))];
+      if (!configuration?.businessDomain.trim() || !questions.length) {
+        throw new Error("Add your business domain and at least one question in Configuration first.");
+      }
+      const brands = configuredBrands(configuration);
+      setProgress({ completed: 0, total: questions.length });
+      setPartial(true);
+      setResult(null);
+      let combined: ResearchResponse | null = null;
+      const answers: ResearchResponse["answers"] = [];
+      for (const [index, question] of questions.entries()) {
+        const response = await runResearch(brands.map((brand) => ({ name: brand.name || brand.domain, aliases: brand.aliases, domain: brand.domain, use_web_search: true, questions: [question] })));
+        answers.push(...response.answers);
+        combined = { ...response, answers: [...answers] };
+        setResult(combined);
+        setProgress({ completed: index + 1, total: questions.length });
+      }
+      if (combined) {
+        setPartial(false);
+        const updated = [combined, ...history].slice(0, 20);
+        setHistory(updated);
+        try { saveHistory(updated); }
+        catch { setError("Check completed, but this browser could not save it. These results are available until you leave this page."); }
+      }
     } catch (error) {
-      setResearchError(error instanceof Error ? error.message : "Research request failed.");
+      setError(error instanceof Error ? error.message : "Research failed. Please try again.");
     } finally {
       setIsResearching(false);
     }
   }
-  const chartData = {
-    "7d": [
-      { label: "Mon", values: [14, 6, 2] },
-      { label: "Tue", values: [16, 8, 4] },
-      { label: "Wed", values: [15, 7, 3] },
-      { label: "Thu", values: [18, 10, 6] },
-      { label: "Fri", values: [19, 12, 8] },
-      { label: "Sat", values: [21, 14, 10] },
-      { label: "Sun", values: [23, 16, 12] },
-    ],
-    "14d": [
-      { label: "May 1", values: [12, 5, 2] },
-      { label: "May 3", values: [14, 7, 4] },
-      { label: "May 5", values: [13, 6, 3] },
-      { label: "May 7", values: [16, 9, 6] },
-      { label: "May 9", values: [18, 11, 8] },
-      { label: "May 11", values: [20, 13, 10] },
-      { label: "May 13", values: [23, 16, 12] },
-    ],
-    "30d": [
-      { label: "Apr 15", values: [10, 4, 1] },
-      { label: "Apr 20", values: [12, 6, 3] },
-      { label: "Apr 25", values: [13, 7, 4] },
-      { label: "Apr 30", values: [15, 9, 6] },
-      { label: "May 5", values: [17, 11, 8] },
-      { label: "May 10", values: [20, 14, 10] },
-      { label: "May 15", values: [23, 16, 12] },
-    ],
-  }[timeRange as "7d" | "14d" | "30d"];
-  const businesses = (researchResults.length ? researchResults : configuredDomains.map((name) => ({ name }))).slice(0, 3).map((business, index) => ({
-    name: business.name,
-    color: ["#475569", "#a1845c", "#9b6b73"][index],
-  }));
-  const brandMentions = businesses
-    .map((business) => {
-      const result = researchResults.find((company) => company.name === business.name);
-      return {
-        ...business,
-        total: result ? (result.company_mentioned ? result.answers.length : 0) : 0,
-      };
-    })
-    .sort((first, second) => second.total - first.total);
-  const highestMentionTotal = brandMentions[0]?.total ?? 1;
-  const businessResult = researchResults.find((company) => company.domain === configuredDomains[0]);
-  const totalAnswerCount = researchResults.reduce((total, company) => total + company.answers.length, 0);
-  const businessMentionCount = businessResult?.company_mentioned ? businessResult.answers.length : 0;
-  const visibilityPercentage = totalAnswerCount
-    ? (businessMentionCount / totalAnswerCount) * 100
-    : 0;
-  const totalMentionCount = researchResults.reduce(
-    (total, company) => total + (company.company_mentioned ? company.answers.length : 0),
-    0,
-  );
-  const shareOfVoicePercentage = totalMentionCount
-    ? (businessMentionCount / totalMentionCount) * 100
-    : 0;
-  const hasResearchMetrics = researchResults.length > 0;
+
+  const companies = result ? summarizeResearch(result) : [];
+  const primary = companies[0];
+  const totalMentions = companies.reduce((total, company) => total + company.mentions, 0);
+  const metrics = [
+    { title: "Visibility", value: primary ? `${primary.visibility.toFixed(1)}%` : "—", detail: primary ? `${primary.mentions} of ${result!.answers.length} answers mention ${primary.domain}` : "Run a check to measure mentions" },
+    { title: "Share of tracked mentions", value: primary?.shareOfVoice != null ? `${primary.shareOfVoice.toFixed(1)}%` : "—", detail: primary ? `${primary.mentions} of ${totalMentions} company–answer matches across tracked companies` : "Each company counts once per answer" },
+    { title: "Answers checked", value: result ? String(result.answers.length) : "—", detail: "One OpenAI answer per question in this run" },
+  ];
 
   return (
     <div className="flex min-h-screen text-black">
-      <Sidebar
-        aria-label="Main navigation"
-        className="w-64 shrink-0 border-r-2 border-black/20 bg-white p-4 pb-6 text-black bg-[#f0efec]"
-      >
-        <div className="flex items-center gap-2.5 px-3 pb-8 text-[21px] font-bold tracking-[-0.03em]">
-          <Image
-            src="/askhopkins.png"
-            alt=""
-            width={34}
-            height={34}
-            className="h-[34px] w-[34px] rounded-lg object-contain"
-            priority
-          />
-          <span>Hopkins</span>
+      <Navigation />
+      <main className="min-w-0 flex-1 bg-gray-50 p-6 md:p-10">
+        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div><h1 className="text-3xl font-semibold">Visibility</h1>
+            <p className="mt-2 text-sm text-gray-600">{partial ? "Current check · partial results" : result ? `Completed: ${new Date(result.completed_at).toLocaleString()}` : "No saved check selected"}</p>
+          </div>
+          <Button onClick={handleRunCheck} disabled={isResearching || !ready}>{isResearching ? "Checking questions…" : "Run Check"}</Button>
+        </header>
+        <details className="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600"><summary className="cursor-pointer font-medium text-gray-800">How this works</summary><p className="mt-3 leading-6">Each category question is sent to OpenAI once, without adding your tracked companies. We look for your domain, brand name and alternative spellings in the answer. Each company counts at most once per answer. A mention does not necessarily mean a recommendation. Visibility is the percentage of answers mentioning your business; share is your portion of all tracked company–answer matches. Results can vary between runs.</p><p className="mt-2 leading-6">The last 20 completed checks are saved in this browser. History comparisons require the same questions, companies, matching names, model and search setting.</p></details>
+        {error && <p role="alert" className="mb-6 rounded-lg bg-red-50 p-4 text-red-700">{error}</p>}
+        {isResearching && <div role="status" className="mb-6 rounded-lg bg-blue-50 p-4 text-sm text-blue-900"><p>{progress.total ? `Checking question ${Math.min(progress.completed + 1, progress.total)} of ${progress.total} · ${progress.completed} complete` : "Preparing your check…"}</p><progress aria-label="Questions completed" className="mt-2 w-full" value={progress.completed} max={progress.total || 1} /><p className="mt-1">Answers appear below as they finish. Keep this page open until the check completes.</p></div>}
+        {partial && !isResearching && result && <p className="mb-4 text-sm text-amber-700">Partial check: {progress.completed} of {progress.total} questions completed. These results are not included in saved history. Run Check to start again.</p>}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {metrics.map((metric) => <Card key={metric.title}><CardHeader><CardTitle>{metric.title}</CardTitle></CardHeader><CardContent><p className="mb-2 text-3xl font-semibold">{metric.value}</p><p className="text-sm text-gray-600">{metric.detail}</p></CardContent></Card>)}
         </div>
-
-        <SidebarContent className="flex flex-col gap-7">
-          <SidebarGroup>
-            <SidebarGroupLabel>Your brand</SidebarGroupLabel>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive>
-                  <Link href="/" aria-current="page">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black bg-black" aria-hidden="true" />
-                    Home
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-
-          <SidebarGroup>
-            <SidebarGroupLabel>Analytics</SidebarGroupLabel>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="#">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                    Visibility
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="#">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                    Brand AI Analytics
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-
-          <SidebarGroup>
-            <SidebarGroupLabel>Optimisations</SidebarGroupLabel>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="#">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                    AEO/SEO Agents
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="#">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                    Documents
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-
-          <SidebarGroup>
-            <SidebarGroupLabel>Context</SidebarGroupLabel>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/configuration">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                    Configuration
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="#">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
-                    Knowledge Bases
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-        </SidebarContent>
-      </Sidebar>
-
-      <main className="min-w-0 flex-1 bg-gray-50">
-        <div className="w-full">
-          <section className="mb-10 flex items-center justify-between gap-6 border-b-2 border-black/40 py-4 px-6 md:px-10 bg-white">
-          <div className="flex items-start justify-start">
-            <h2 className="m-0 text-[28px] font-semibold leading-tight text-black">Visibility</h2>
-            <ButtonGroup className="ml-8 overflow-hidden rounded-lg border border-black bg-gray-100">
-              <Button
-                className={`min-w-[46px] rounded-none border-0 ${timeRange === "7d" ? "bg-black text-white hover:bg-black hover:text-white active:bg-black active:text-white" : "text-black"}`}
-                variant="outline"
-                size="sm"
-                aria-pressed={timeRange === "7d"}
-                onClick={() => setTimeRange("7d")}
-              >
-                7d
-              </Button>
-              <Button
-                className={`min-w-[46px] rounded-none border-0 ${timeRange === "14d" ? "bg-black text-white hover:bg-black hover:text-white active:bg-black active:text-white" : "text-black"}`}
-                variant="outline"
-                size="sm"
-                aria-pressed={timeRange === "14d"}
-                onClick={() => setTimeRange("14d")}
-              >
-                14d
-              </Button>
-              <Button
-                className={`min-w-[46px] rounded-none border-0 ${timeRange === "30d" ? "bg-black text-white hover:bg-black hover:text-white active:bg-black active:text-white" : "text-black"}`}
-                variant="outline"
-                size="sm"
-                aria-pressed={timeRange === "30d"}
-                onClick={() => setTimeRange("30d")}
-              >
-                30d
-              </Button>
-            </ButtonGroup>
-            </div>
-            <div>
-              <Button className="bg-green-100/70 hover:bg-green-100/70 ml-4 md:ml-30 text-green-700" variant="default" size="lg">
-                ● Last Run 2h ago
-              </Button>
-              <Button
-                variant="default"
-                size="lg"
-                className="ml-2 bg-black hover:bg-black"
-                onClick={handleRunCheck}
-                disabled={isResearching}
-              >
-                {isResearching ? "Running..." : "Run Check"}
-              </Button>
-            </div>
+        <VisibilityChart history={history} selected={partial ? null : result} />
+        {!result ? <Card className="mt-6"><CardHeader><CardTitle>Start with your market</CardTitle><CardDescription>Save your business, competitors and questions, then run a check to see the actual answers and sources.</CardDescription></CardHeader><CardContent><Link className="underline" href="/configuration">Open Configuration →</Link></CardContent></Card> : <>
+          <Card className="mt-6"><CardHeader><CardTitle>Who AI mentions</CardTitle><CardDescription>All tracked companies, measured against the same {result.answers.length} answers. Source URLs alone do not count as mentions.</CardDescription></CardHeader>
+            <CardContent className="space-y-5">{companies.map((company) => <div key={company.domain}>
+              <div className="mb-2 flex flex-wrap justify-between gap-2 text-sm"><span className="font-medium">{company.name}{company.domain === primary?.domain ? " · Your business" : ""}</span><span>{company.mentions}/{result.answers.length} answers · {company.visibility.toFixed(1)}%</span></div>
+              <div className="h-2 overflow-hidden rounded bg-gray-100"><div className="h-full bg-slate-600" style={{ width: `${company.visibility}%` }} /></div>
+              <p className="mt-2 text-xs text-gray-500">Matched names: {company.aliases.join(", ")}</p>
+            </div>)}<p className="text-xs text-gray-500">Matches use your configured names, or a name inferred from the domain when left blank. Review alternative spellings in Configuration if a mention is missed. Common words may produce false matches.</p></CardContent>
+          </Card>
+          <section className="mt-8 space-y-4" aria-label="Answer evidence"><h2 className="text-xl font-semibold">Answers and sources</h2>
+            {result.answers.map((answer, index) => <details key={`${result.completed_at}-${index}`} className="group rounded-xl border border-gray-200 bg-white shadow-sm">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl p-4 transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500 [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{index + 1}. {answer.question}</span>
+                  <span className="mt-1 block text-xs text-gray-500">{answer.mentions.length} tracked {answer.mentions.length === 1 ? "company" : "companies"} mentioned · {answer.sources.length} {answer.sources.length === 1 ? "source" : "sources"} · {answer.web_search_used ? "Web search used" : "No web search used"}</span>
+                </span>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4 shrink-0 text-gray-500 transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
+              </summary>
+              <div className="border-t border-gray-100 p-4 md:p-6">
+              <p className="mb-4 whitespace-pre-wrap break-words text-sm leading-7">{answer.answer}</p>
+              <div className="mb-4 flex flex-wrap gap-2">{companies.map((company) => {
+                const mention = answer.mentions.find((item) => item.domain === company.domain);
+                return <span key={company.domain} className={`rounded-md px-3 py-2 text-xs ${mention ? "bg-green-50 text-green-800" : "bg-gray-100 text-gray-600"}`}>{company.domain}: {mention ? `matched “${mention.matched_text}”` : "no match"}</span>;
+              })}</div>
+              <h3 className="mb-2 text-sm font-semibold">Cited sources</h3>
+              {answer.sources.length ? <ul className="space-y-2">{answer.sources.filter((url) => /^https?:\/\//i.test(url)).map((url) => <li key={url}><a className="break-all text-sm text-blue-700 underline" href={url} target="_blank" rel="noopener noreferrer">{url}</a></li>)}</ul> : <p className="text-sm text-gray-500">No citation links returned for this answer.</p>}
+            </div></details>)}
           </section>
-
-          {researchError && (
-            <p className="mx-10 mb-4 text-sm text-red-700" role="alert">{researchError}</p>
-          )}
-
-          <div className="flex flex-nowrap justify-between gap-4 overflow-x-auto py-1 px-10">
-            <Card className="w-80 shrink-0">
-            <CardHeader>
-              <CardTitle className="text-md capitalize text-gray-800">Visibility</CardTitle>
-              <CardDescription className="flex items-center gap-2">
-                <p className="text-4xl font-bold text-black">{hasResearchMetrics ? `${visibilityPercentage.toFixed(1)}%` : "13.5%"}</p>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">{hasResearchMetrics ? `${businessMentionCount} of ${totalAnswerCount} answers` : "3 of every 20 answers"}</p>
-            </CardContent>
-          </Card>
-          <Card className="w-80 shrink-0">
-            <CardHeader>
-              <CardTitle className="text-md capitalize text-gray-800">Share of Voice</CardTitle>
-              <CardDescription className="flex items-center gap-2">
-                <p className="text-4xl font-bold text-black">{hasResearchMetrics ? `${shareOfVoicePercentage.toFixed(1)}%` : "25.3%"}</p>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">{hasResearchMetrics ? "of returned brand mentions" : "of all brand mentions"}</p>
-            </CardContent>
-          </Card>
-          <Card className="w-80 shrink-0">
-            <CardHeader>
-              <CardTitle className="text-md capitalize text-gray-800">Avg. Position</CardTitle>
-              <CardDescription className="flex items-center gap-2">
-                <p className="text-4xl font-bold text-black">{hasResearchMetrics ? (businessResult?.order_mentioned || "-") : "3.2"}</p>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">{hasResearchMetrics ? (businessResult?.company_mentioned ? "position in returned answers" : "not mentioned") : "5th on the list"}</p>
-            </CardContent>
-          </Card>
-          <Card className="w-80 shrink-0">
-            <CardHeader>
-              <CardTitle className="text-md capitalize text-gray-800">Fact Gap</CardTitle>
-              <CardDescription className="flex items-center gap-2">
-                <p className="text-4xl font-bold text-black">1.5</p>
-                <Badge className="text-md bg-red-100 text-red-700 hover:bg-red-100">6 wrong</Badge>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">of 22 claims about you</p>
-            </CardContent>
-          </Card>
-          </div>
-
-          <div className="mx-10 mt-8 flex flex-nowrap gap-4 overflow-x-auto">
-            <Card className="min-w-[480px] flex-1">
-              <CardHeader>
-                <CardTitle>Visibility over time</CardTitle>
-                <CardDescription>Business visibility across the selected period</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-72 w-full rounded-lg bg-gray-50 p-3">
-                <svg
-                  className="h-full w-full"
-                  viewBox="0 0 900 280"
-                  role="img"
-                  aria-labelledby="visibility-chart-title visibility-chart-description"
-                  preserveAspectRatio="none"
-                >
-                  <title id="visibility-chart-title">Business visibility over time</title>
-                  <desc id="visibility-chart-description">
-                    Visibility over time for Hopkins, Acme, and Northstar across the selected period.
-                  </desc>
-                  {[4, 8, 12, 16, 20].map((value) => {
-                    const y = 230 - value * 8.5;
-                    return (
-                      <g key={value}>
-                        <line x1="42" x2="870" y1={y} y2={y} stroke="#d1d5db" strokeDasharray="4 6" strokeWidth="1" />
-                      </g>
-                    );
-                  })}
-                  {businesses.map((business, businessIndex) => {
-                    const points = chartData
-                      .map((point, index) => `${index * 140 + 30},${230 - point.values[businessIndex] * 8.5}`)
-                      .join(" ");
-
-                    return (
-                      <g key={business.name}>
-                        <polyline points={points} fill="none" stroke={business.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                        {chartData.map((point, index) => {
-                          const x = index * 140 + 30;
-                          const y = 230 - point.values[businessIndex] * 8.5;
-                          const value = point.values[businessIndex];
-
-                          return (
-                            <circle
-                              key={`${business.name}-${point.label}`}
-                              cx={x}
-                              cy={y}
-                              r="8"
-                              fill="transparent"
-                              stroke="none"
-                              className="cursor-pointer"
-                              tabIndex={0}
-                              aria-label={`${business.name}: ${value}% on ${point.label}`}
-                            >
-                              <title>{`${business.name}: ${value}% on ${point.label}`}</title>
-                            </circle>
-                          );
-                        })}
-                      </g>
-                    );
-                  })}
-                  {chartData.map((point, index) => {
-                    const x = index * 140 + 30;
-                    return <text key={point.label} x={x} y="252" textAnchor="middle" fill="#6b7280" fontSize="12">{point.label}</text>;
-                  })}
-                </svg>
-              </div>
-              <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 px-3 text-xs text-gray-600">
-                {businesses.map((business) => (
-                  <div key={business.name} className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: business.color }} aria-hidden="true" />
-                    <span>{business.name}</span>
-                  </div>
-                ))}
-              </div>
-              </CardContent>
-            </Card>
-
-            <Card className="w-96 shrink-0">
-              <CardHeader>
-                <CardTitle>Who AI names</CardTitle>
-                <CardDescription>Most frequently mentioned alongside your brand</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {brandMentions.map((business) => (
-                    <div key={business.name} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 font-medium text-gray-800">
-                          <span
-                            className="h-2.5 w-2.5 rounded-full"
-                            style={{ backgroundColor: business.color }}
-                            aria-hidden="true"
-                          />
-                          <span>{business.name}</span>
-                        </div>
-                        <span className="text-gray-500">{business.total}</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${(business.total / highestMentionTotal) * 100}%`,
-                            backgroundColor: business.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        </>}
+        <section id="history" className="mt-8 scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="text-xl font-semibold">Run history</h2><p className="mt-2 text-sm text-gray-500">Last 20 completed checks in this browser. Select a run to review its answers.</p>
+          {!history.length ? <p className="mt-4 text-sm text-gray-600">Your first completed check will appear here.</p> : <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-3">Completed</th><th className="p-3">Business</th><th className="p-3">Visibility</th><th className="p-3">Change</th><th className="p-3">Answers</th></tr></thead><tbody>{history.map((run, index) => {
+            const summary = summarizeResearch(run)[0];
+            const previous = history.slice(index + 1).find((older) => comparisonKey(older) === comparisonKey(run));
+            const difference = previous ? summary.visibility - summarizeResearch(previous)[0].visibility : null;
+            return <tr key={run.completed_at} className={`border-b last:border-0 ${!partial && result?.completed_at === run.completed_at ? "bg-slate-50" : ""}`}><td className="p-3"><button disabled={isResearching} className="text-left text-blue-700 underline disabled:opacity-50" onClick={() => { setResult(run); setPartial(false); }}>{new Date(run.completed_at).toLocaleString()}</button></td><td className="p-3">{summary.name}</td><td className="p-3">{summary.visibility.toFixed(1)}%</td><td className="p-3">{difference === null ? "No comparable earlier run" : `${difference > 0 ? "+" : ""}${difference.toFixed(1)} pp`}</td><td className="p-3">{run.answers.length}</td></tr>;
+          })}</tbody></table><p className="mt-3 text-xs text-gray-500">Change is in percentage points versus the previous comparable run.</p></div>}
+        </section>
       </main>
     </div>
   );
