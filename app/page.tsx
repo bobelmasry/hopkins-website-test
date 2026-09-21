@@ -31,6 +31,47 @@ import { Badge } from "@/components/ui/badge"
 
 export default function Home() {
   const [timeRange, setTimeRange] = useState("7d");
+  const chartData = {
+    "7d": [
+      { label: "Mon", values: [14, 6, 2] },
+      { label: "Tue", values: [16, 8, 4] },
+      { label: "Wed", values: [15, 7, 3] },
+      { label: "Thu", values: [18, 10, 6] },
+      { label: "Fri", values: [19, 12, 8] },
+      { label: "Sat", values: [21, 14, 10] },
+      { label: "Sun", values: [23, 16, 12] },
+    ],
+    "14d": [
+      { label: "May 1", values: [12, 5, 2] },
+      { label: "May 3", values: [14, 7, 4] },
+      { label: "May 5", values: [13, 6, 3] },
+      { label: "May 7", values: [16, 9, 6] },
+      { label: "May 9", values: [18, 11, 8] },
+      { label: "May 11", values: [20, 13, 10] },
+      { label: "May 13", values: [23, 16, 12] },
+    ],
+    "30d": [
+      { label: "Apr 15", values: [10, 4, 1] },
+      { label: "Apr 20", values: [12, 6, 3] },
+      { label: "Apr 25", values: [13, 7, 4] },
+      { label: "Apr 30", values: [15, 9, 6] },
+      { label: "May 5", values: [17, 11, 8] },
+      { label: "May 10", values: [20, 14, 10] },
+      { label: "May 15", values: [23, 16, 12] },
+    ],
+  }[timeRange as "7d" | "14d" | "30d"];
+  const businesses = [
+    { name: "Hopkins", color: "#111827" },
+    { name: "Acme", color: "#2563eb" },
+    { name: "Northstar", color: "#e11d48" },
+  ];
+  const brandMentions = businesses
+    .map((business, businessIndex) => ({
+      ...business,
+      total: chartData.reduce((sum, point) => sum + point.values[businessIndex], 0),
+    }))
+    .sort((first, second) => second.total - first.total);
+  const highestMentionTotal = brandMentions[0]?.total ?? 1;
 
   return (
     <div className="flex min-h-screen text-black">
@@ -219,6 +260,102 @@ export default function Home() {
               <p className="text-sm text-gray-500">of 22 claims about you</p>
             </CardContent>
           </Card>
+          </div>
+
+          <div className="mx-10 mt-8 flex flex-nowrap gap-4 overflow-x-auto">
+            <Card className="min-w-[480px] flex-1">
+              <CardHeader>
+                <CardTitle>Visibility over time</CardTitle>
+                <CardDescription>Business visibility across the selected period</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-72 w-full rounded-lg bg-gray-50 p-3">
+                <svg
+                  className="h-full w-full"
+                  viewBox="0 0 900 280"
+                  role="img"
+                  aria-labelledby="visibility-chart-title visibility-chart-description"
+                  preserveAspectRatio="none"
+                >
+                  <title id="visibility-chart-title">Business visibility over time</title>
+                  <desc id="visibility-chart-description">
+                    Visibility over time for Hopkins, Acme, and Northstar across the selected period.
+                  </desc>
+                  {[4, 8, 12, 16, 20].map((value) => {
+                    const y = 230 - value * 8.5;
+                    return (
+                      <g key={value}>
+                        <line x1="42" x2="870" y1={y} y2={y} stroke="#d1d5db" strokeDasharray="4 6" strokeWidth="1" />
+                      </g>
+                    );
+                  })}
+                  {businesses.map((business, businessIndex) => {
+                    const points = chartData
+                      .map((point, index) => `${index * 140 + 30},${230 - point.values[businessIndex] * 8.5}`)
+                      .join(" ");
+
+                    return (
+                      <g key={business.name}>
+                        <polyline points={points} fill="none" stroke={business.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                        {chartData.map((point, index) => {
+                          const x = index * 140 + 30;
+                          const y = 230 - point.values[businessIndex] * 8.5;
+                          return <circle key={`${business.name}-${point.label}`} cx={x} cy={y} r="5" fill="#ffffff" stroke={business.color} strokeWidth="3" />;
+                        })}
+                      </g>
+                    );
+                  })}
+                  {chartData.map((point, index) => {
+                    const x = index * 140 + 30;
+                    return <text key={point.label} x={x} y="252" textAnchor="middle" fill="#6b7280" fontSize="12">{point.label}</text>;
+                  })}
+                </svg>
+              </div>
+              <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 px-3 text-xs text-gray-600">
+                {businesses.map((business) => (
+                  <div key={business.name} className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: business.color }} aria-hidden="true" />
+                    <span>{business.name}</span>
+                  </div>
+                ))}
+              </div>
+              </CardContent>
+            </Card>
+
+            <Card className="w-96 shrink-0">
+              <CardHeader>
+                <CardTitle>Who AI names</CardTitle>
+                <CardDescription>Most frequently mentioned alongside your brand</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {brandMentions.map((business) => (
+                    <div key={business.name} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2 font-medium text-gray-800">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: business.color }}
+                            aria-hidden="true"
+                          />
+                          <span>{business.name}</span>
+                        </div>
+                        <span className="text-gray-500">{business.total}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${(business.total / highestMentionTotal) * 100}%`,
+                            backgroundColor: business.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>
