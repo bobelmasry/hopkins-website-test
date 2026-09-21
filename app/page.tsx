@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -28,9 +29,24 @@ import {
 } from "@/components/ui/card"
 
 import { Badge } from "@/components/ui/badge"
+import { loadConfiguration } from "@/lib/configuration";
 
 export default function Home() {
   const [timeRange, setTimeRange] = useState("7d");
+  const [configuredDomains, setConfiguredDomains] = useState<string[]>([]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const configuration = loadConfiguration();
+      const domains = configuration
+        ? [configuration.businessDomain, ...configuration.competitorDomains].filter(Boolean).slice(0, 3)
+        : [];
+
+      setConfiguredDomains(domains);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
   const chartData = {
     "7d": [
       { label: "Mon", values: [14, 6, 2] },
@@ -61,9 +77,9 @@ export default function Home() {
     ],
   }[timeRange as "7d" | "14d" | "30d"];
   const businesses = [
-    { name: "Hopkins", color: "#475569" },
-    { name: "Acme", color: "#a1845c" },
-    { name: "Northstar", color: "#9b6b73" },
+    { name: configuredDomains[0] ?? "Hopkins", color: "#475569" },
+    { name: configuredDomains[1] ?? "Acme", color: "#a1845c" },
+    { name: configuredDomains[2] ?? "Northstar", color: "#9b6b73" },
   ];
   const brandMentions = businesses
     .map((business, businessIndex) => ({
@@ -97,7 +113,7 @@ export default function Home() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive>
-                  <Link href="#" aria-current="page">
+                  <Link href="/" aria-current="page">
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black bg-black" aria-hidden="true" />
                     Home
                   </Link>
@@ -153,6 +169,14 @@ export default function Home() {
           <SidebarGroup>
             <SidebarGroupLabel>Context</SidebarGroupLabel>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/configuration">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-black" aria-hidden="true" />
+                    Configuration
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link href="#">
