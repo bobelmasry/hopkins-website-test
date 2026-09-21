@@ -265,7 +265,7 @@ export default function ConfigurationPage() {
                     <label htmlFor={`question-${index}`} className="sr-only">Question {index + 1}</label>
                     <textarea
                       id={`question-${index}`}
-                      rows={3}
+                      rows={2}
                       value={question}
                       placeholder="What is the best option for..."
                       className={`${inputClassName} h-auto resize-y py-3 leading-5`}

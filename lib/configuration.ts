@@ -26,4 +26,5 @@ export function loadConfiguration(): HopkinsConfiguration | null {
 
 export function saveConfiguration(configuration: HopkinsConfiguration) {
   window.localStorage.setItem(configurationStorageKey, JSON.stringify(configuration));
+  console.log("Saved Hopkins configuration to localStorage:", configuration);
 }

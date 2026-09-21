@@ -6,7 +6,7 @@ function Sidebar({ className, ...props }: React.ComponentProps<"aside">) {
   return (
     <aside
       data-slot="sidebar"
-      className={cn(className)}
+      className={cn("sticky top-0 h-screen max-h-screen overflow-hidden", className)}
       {...props}
     />
   );

@@ -30,10 +30,14 @@ import {
 
 import { Badge } from "@/components/ui/badge"
 import { loadConfiguration } from "@/lib/configuration";
+import { CompanyResult, runResearch } from "@/lib/research";
 
 export default function Home() {
   const [timeRange, setTimeRange] = useState("7d");
   const [configuredDomains, setConfiguredDomains] = useState<string[]>([]);
+  const [researchResults, setResearchResults] = useState<CompanyResult[]>([]);
+  const [isResearching, setIsResearching] = useState(false);
+  const [researchError, setResearchError] = useState("");
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -47,6 +51,37 @@ export default function Home() {
 
     return () => window.clearTimeout(timeoutId);
   }, []);
+
+  async function handleRunCheck() {
+    const configuration = loadConfiguration();
+
+    if (!configuration?.businessDomain || !configuration.questions.length) {
+      setResearchError("Add a business domain and at least one question in Configuration first.");
+      return;
+    }
+
+    const domains = [configuration.businessDomain, ...configuration.competitorDomains].filter(Boolean);
+
+    setIsResearching(true);
+    setResearchError("");
+
+    try {
+      const response = await runResearch(
+        domains.map((domain) => ({
+          name: domain,
+          domain,
+          use_web_search: true,
+          questions: configuration.questions,
+        })),
+      );
+
+      setResearchResults(response.companies);
+    } catch (error) {
+      setResearchError(error instanceof Error ? error.message : "Research request failed.");
+    } finally {
+      setIsResearching(false);
+    }
+  }
   const chartData = {
     "7d": [
       { label: "Mon", values: [14, 6, 2] },
@@ -76,18 +111,34 @@ export default function Home() {
       { label: "May 15", values: [23, 16, 12] },
     ],
   }[timeRange as "7d" | "14d" | "30d"];
-  const businesses = [
-    { name: configuredDomains[0] ?? "Hopkins", color: "#475569" },
-    { name: configuredDomains[1] ?? "Acme", color: "#a1845c" },
-    { name: configuredDomains[2] ?? "Northstar", color: "#9b6b73" },
-  ];
+  const businesses = (researchResults.length ? researchResults : configuredDomains.map((name) => ({ name }))).slice(0, 3).map((business, index) => ({
+    name: business.name,
+    color: ["#475569", "#a1845c", "#9b6b73"][index],
+  }));
   const brandMentions = businesses
-    .map((business, businessIndex) => ({
-      ...business,
-      total: chartData.reduce((sum, point) => sum + point.values[businessIndex], 0),
-    }))
+    .map((business) => {
+      const result = researchResults.find((company) => company.name === business.name);
+      return {
+        ...business,
+        total: result ? (result.company_mentioned ? result.answers.length : 0) : 0,
+      };
+    })
     .sort((first, second) => second.total - first.total);
   const highestMentionTotal = brandMentions[0]?.total ?? 1;
+  const businessResult = researchResults.find((company) => company.domain === configuredDomains[0]);
+  const totalAnswerCount = researchResults.reduce((total, company) => total + company.answers.length, 0);
+  const businessMentionCount = businessResult?.company_mentioned ? businessResult.answers.length : 0;
+  const visibilityPercentage = totalAnswerCount
+    ? (businessMentionCount / totalAnswerCount) * 100
+    : 0;
+  const totalMentionCount = researchResults.reduce(
+    (total, company) => total + (company.company_mentioned ? company.answers.length : 0),
+    0,
+  );
+  const shareOfVoicePercentage = totalMentionCount
+    ? (businessMentionCount / totalMentionCount) * 100
+    : 0;
+  const hasResearchMetrics = researchResults.length > 0;
 
   return (
     <div className="flex min-h-screen text-black">
@@ -229,47 +280,54 @@ export default function Home() {
               <Button className="bg-green-100/70 hover:bg-green-100/70 ml-4 md:ml-30 text-green-700" variant="default" size="lg">
                 ● Last Run 2h ago
               </Button>
-              <Button variant="default" size="lg" className="ml-2 bg-black hover:bg-black">
-                Run Check
+              <Button
+                variant="default"
+                size="lg"
+                className="ml-2 bg-black hover:bg-black"
+                onClick={handleRunCheck}
+                disabled={isResearching}
+              >
+                {isResearching ? "Running..." : "Run Check"}
               </Button>
             </div>
           </section>
+
+          {researchError && (
+            <p className="mx-10 mb-4 text-sm text-red-700" role="alert">{researchError}</p>
+          )}
 
           <div className="flex flex-nowrap justify-between gap-4 overflow-x-auto py-1 px-10">
             <Card className="w-80 shrink-0">
             <CardHeader>
               <CardTitle className="text-md capitalize text-gray-800">Visibility</CardTitle>
               <CardDescription className="flex items-center gap-2">
-                <p className="text-4xl font-bold text-black">13.5%</p>
-                <Badge className="text-md bg-green-100 text-green-700 hover:bg-green-100">+2.5%</Badge>
+                <p className="text-4xl font-bold text-black">{hasResearchMetrics ? `${visibilityPercentage.toFixed(1)}%` : "13.5%"}</p>
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">3 of every 20 answers</p>
+              <p className="text-sm text-gray-500">{hasResearchMetrics ? `${businessMentionCount} of ${totalAnswerCount} answers` : "3 of every 20 answers"}</p>
             </CardContent>
           </Card>
           <Card className="w-80 shrink-0">
             <CardHeader>
               <CardTitle className="text-md capitalize text-gray-800">Share of Voice</CardTitle>
               <CardDescription className="flex items-center gap-2">
-                <p className="text-4xl font-bold text-black">25.3%</p>
-                <Badge className="text-md bg-green-100 text-green-700 hover:bg-green-100">+1.2%</Badge>
+                <p className="text-4xl font-bold text-black">{hasResearchMetrics ? `${shareOfVoicePercentage.toFixed(1)}%` : "25.3%"}</p>
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">of all brand mentions</p>
+              <p className="text-sm text-gray-500">{hasResearchMetrics ? "of returned brand mentions" : "of all brand mentions"}</p>
             </CardContent>
           </Card>
           <Card className="w-80 shrink-0">
             <CardHeader>
               <CardTitle className="text-md capitalize text-gray-800">Avg. Position</CardTitle>
               <CardDescription className="flex items-center gap-2">
-                <p className="text-4xl font-bold text-black">3.2</p>
-                <Badge className="text-md bg-green-100 text-green-700 hover:bg-green-100">-0.5</Badge>
+                <p className="text-4xl font-bold text-black">{hasResearchMetrics ? (businessResult?.order_mentioned || "-") : "3.2"}</p>
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">5th on the list</p>
+              <p className="text-sm text-gray-500">{hasResearchMetrics ? (businessResult?.company_mentioned ? "position in returned answers" : "not mentioned") : "5th on the list"}</p>
             </CardContent>
           </Card>
           <Card className="w-80 shrink-0">
