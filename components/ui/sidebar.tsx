@@ -6,7 +6,7 @@ function Sidebar({ className, ...props }: React.ComponentProps<"aside">) {
   return (
     <aside
       data-slot="sidebar"
-      className={cn("sidebar", className)}
+      className={cn(className)}
       {...props}
     />
   );
@@ -16,7 +16,7 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"nav">) {
   return (
     <nav
       data-slot="sidebar-content"
-      className={cn("navigation", className)}
+      className={cn(className)}
       {...props}
     />
   );
@@ -26,7 +26,7 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sidebar-group"
-      className={cn("nav-group", className)}
+      className={cn("flex flex-col gap-1", className)}
       {...props}
     />
   );
@@ -39,7 +39,7 @@ function SidebarGroupLabel({
   return (
     <p
       data-slot="sidebar-group-label"
-      className={cn("nav-label", className)}
+      className={cn("m-0 mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.08em] leading-none text-black", className)}
       {...props}
     />
   );
@@ -49,7 +49,7 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sidebar-menu"
-      className={cn("nav-menu", className)}
+      className={cn("flex flex-col gap-1", className)}
       {...props}
     />
   );
@@ -59,7 +59,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sidebar-menu-item"
-      className={cn("nav-menu-item", className)}
+      className={cn("contents", className)}
       {...props}
     />
   );
@@ -75,7 +75,11 @@ function SidebarMenuButton({
   asChild?: boolean;
   isActive?: boolean;
 }) {
-  const classes = cn("nav-item", isActive && "nav-item-active", className);
+  const classes = cn(
+    "flex min-h-[39px] items-center gap-3 rounded-md px-3 text-sm font-medium leading-tight text-black transition-colors hover:bg-gray-100",
+    isActive && "bg-gray-100 font-semibold",
+    className,
+  );
 
   if (
     asChild &&
