@@ -61,9 +61,9 @@ export default function Home() {
     ],
   }[timeRange as "7d" | "14d" | "30d"];
   const businesses = [
-    { name: "Hopkins", color: "#111827" },
-    { name: "Acme", color: "#2563eb" },
-    { name: "Northstar", color: "#e11d48" },
+    { name: "Hopkins", color: "#475569" },
+    { name: "Acme", color: "#a1845c" },
+    { name: "Northstar", color: "#9b6b73" },
   ];
   const brandMentions = businesses
     .map((business, businessIndex) => ({
@@ -300,7 +300,23 @@ export default function Home() {
                         {chartData.map((point, index) => {
                           const x = index * 140 + 30;
                           const y = 230 - point.values[businessIndex] * 8.5;
-                          return <circle key={`${business.name}-${point.label}`} cx={x} cy={y} r="5" fill="#ffffff" stroke={business.color} strokeWidth="3" />;
+                          const value = point.values[businessIndex];
+
+                          return (
+                            <circle
+                              key={`${business.name}-${point.label}`}
+                              cx={x}
+                              cy={y}
+                              r="8"
+                              fill="transparent"
+                              stroke="none"
+                              className="cursor-pointer"
+                              tabIndex={0}
+                              aria-label={`${business.name}: ${value}% on ${point.label}`}
+                            >
+                              <title>{`${business.name}: ${value}% on ${point.label}`}</title>
+                            </circle>
+                          );
                         })}
                       </g>
                     );
